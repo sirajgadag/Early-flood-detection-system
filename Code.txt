@@ -1,0 +1,275 @@
+#include <iotgecko.h>
+
+#include <LiquidCrystal.h>
+#include "DHT.h"
+#define esp_baudrate 9600
+
+
+///////variables////////////////
+
+String id = "sirajgdg9@gmail.com"; // iotgecko login id
+String pass = "3441"; // iotgecko login password
+String ssid = "iot"; // SSID/name of your wifi router or wifi hotspot
+String pass_key = "project1234"; // Wifi password
+
+bool notConected = true;
+bool login = false;
+
+const int no_of_senddata = 5;
+const int no_of_getdata = 0;
+String iot_data[no_of_senddata];
+int motor_status[no_of_getdata];
+int pump_status = 0;
+
+unsigned long current_time ;
+iotgecko gecko = iotgecko(esp_baudrate);
+
+
+
+
+
+const int rs = 13, en = 12, d4 = 11, d5 = 10, d6 = 9, d7 = 8;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+#define trigPin A4
+#define echoPin A5
+#define DHTPIN 4
+#define Water_Level_Sensor 6
+#define buzzer 5
+
+int buttonState = 0;         // variable for reading the pushbutton status
+long duration;
+int distance;
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+volatile int flow_frequency; // Measures flow sensor pulses
+unsigned int l_hour; // Calculated litres/hour
+unsigned char flowsensor = 2; // Sensor Input
+unsigned long currentTime;
+unsigned long cloopTime;
+int humidity, temperature;
+bool water_level;
+void flow () // Interrupt function
+{
+  flow_frequency++;
+}
+void setup() {
+  lcd.begin (20, 4);
+  lcd.clear();
+  //lcd.setCursor(0,0);
+  lcd.print("   FLOOD DETECTION");
+  // lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.print("      SYSTEM");
+  // lcd.clear();
+  delay(2000);
+
+
+  lcd.clear();
+  lcd.print(F("Connecting Wifi"));
+  gecko.listen();
+  while (notConected)
+  {
+    if (gecko.GeckoConnect(ssid, pass_key)) //connect to wifi with given SSID and password
+    {
+      while (!login)
+      {
+        if (gecko.GeckoVerify(id, pass)) //login to iotgecko.com with given ID and password
+        {
+          lcd.clear();
+          lcd.print(F("Connected"));
+          login = true;
+          notConected = false;
+        }
+      }
+    }
+    delay(1000);
+
+
+    lcd.clear();
+
+
+
+    // pinMode (Led, OUTPUT);
+    pinMode (trigPin, OUTPUT);
+    pinMode (echoPin, INPUT);
+    dht.begin();
+    pinMode(Water_Level_Sensor, INPUT);
+    // pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(buzzer, OUTPUT);
+    pinMode(flowsensor, INPUT);
+    digitalWrite(flowsensor, HIGH); // Optional Internal Pull-Up
+    attachInterrupt(0, flow, RISING); // Setup Interrupt
+    sei(); // Enable interrupts
+    currentTime = millis();
+    cloopTime = currentTime;
+    Serial.begin (9600);
+  }
+}
+
+void loop()
+{
+
+  loop1();
+  //delay(500);
+  loop2();
+  //delay(500);
+  loop3();
+  //delay(500);
+  loop4();
+  delay(2000);
+   //iot_data[0] =(String)2;
+  iot_data[0] =(String)temperature;
+  iot_data[1] = (String)humidity;
+  iot_data[2] = (String)distance;
+  iot_data[3] = (String)l_hour;
+  iot_data[4] = (String)water_level;
+   int iot_status = gecko.SendandGetGParams(iot_data,no_of_senddata, motor_status , no_of_getdata);//send and get data on iotgecko.com
+  if(iot_status == VALID)
+  {
+   
+  }
+  else
+  {
+    lcd.clear();
+    lcd.print(F("reconnecting"));
+    while(!gecko.GeckoReconnect())//reconnect to the iotgecko.com 
+    {
+      //Serial.println(F("conncetion failed.....reconnecting"));
+      delay(2000);
+    }
+    lcd.clear();
+    lcd.print("Connected");
+    //Serial.println(F("connected succesfully"));
+  }
+  delay(3000);
+}
+/*else
+  {
+  lcd.clear();
+  lcd.setCursor(5,0);
+  lcd.print("FLOOD DETECTION");
+  lcd.clear();
+    lcd.setCursor(8,1);
+   lcd.print("SYSTEM");
+  }
+  }*/
+void loop1()
+{
+
+  digitalWrite (trigPin, LOW);
+  delayMicroseconds (2);
+
+  digitalWrite (trigPin, HIGH);
+  delayMicroseconds (10);
+  digitalWrite (trigPin, LOW);
+
+  duration = pulseIn (echoPin, HIGH);
+  distance = duration / 58   ;
+
+  Serial.print ("Distance   :");
+  Serial.print (distance);
+  Serial.println ("  cm   ");
+  delay (120);
+  // lcd.clear();
+  lcd.setCursor(0, 0); // Sets the location at which subsequent text written to the LCD will be displayed
+  lcd.print("Distance   :"); // Prints string "Distance" on the LCD
+  lcd.print(distance); // Prints the distance value from the sensor
+  lcd.print("  cm  ");
+  //lcd.clear();
+  delay (120);
+
+}
+void loop2()
+{
+
+  delay(2000);
+
+  // Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  int h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  int t = dht.readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  //float f = dht.readTemperature(true);
+
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t)) {
+    Serial.println("Failed to read from DHT sensor!");
+    return;
+  }
+
+  // Compute heat index in Fahrenheit (the default)
+  // float hif = dht.computeHeatIndex(f, h);
+  // Compute heat index in Celsius (isFahreheit = false)
+  //float hic = dht.computeHeatIndex(t, h, false);
+
+  Serial.println("Humidity: ");
+  Serial.print(h);
+  Serial.println(" %\t");
+  Serial.print("Temperature: ");
+  Serial.println(t);
+  Serial.println(" *C ");
+  // lcd.clear();
+  humidity = h;
+  temperature = t;
+  lcd.setCursor(0, 1);
+  lcd.print("  HUM:");
+  lcd.print(h);
+  lcd.print("%");
+  lcd.print("  Temp:");
+  lcd.print(t);
+  lcd.print("*C");
+  delay(120);
+  //Serial.print(f);
+  // Serial.print(" *F\t");
+  // Serial.print("Heat index: ");
+  // Serial.print(hic);
+  // Serial.print(" *C ");
+  // Serial.print(hif);
+  // Serial.println(" *F");
+}
+void loop3()
+{
+  buttonState = digitalRead(Water_Level_Sensor);
+
+  if (buttonState == LOW) {
+    Serial.println( "WATER LEVEL - LOW");
+    // digitalWrite(LED_BUILTIN, LOW);   // turn the LED on (HIGH is the voltage level)
+    digitalWrite(buzzer, LOW);
+    // lcd.clear();
+    lcd.setCursor(0, 3);
+    lcd.print("Water Level: LOW");
+    water_level = 0;
+    delay(500);
+  }
+  else {
+    Serial.println( "WATER LEVEL - HIGH" );
+    //digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
+    digitalWrite(buzzer, HIGH);
+    // lcd.clear();
+    lcd.setCursor(0, 3);
+    lcd.print("Water Level:HIGH");
+    water_level=1;
+    // lcd.print("Floa
+    delay(500);
+  }
+}
+
+void loop4()
+{
+  currentTime = millis();
+  // Every second, calculate and print litres/hour
+  if (currentTime >= (cloopTime + 1000))
+  {
+    cloopTime = currentTime; // Updates cloopTime
+    // Pulse frequency (Hz) = 7.5Q, Q is flow rate in L/min.
+    l_hour = (flow_frequency * 60 / 7.5); // (Pulse frequency x 60 min) / 7.5Q = flowrate in L/hour
+    flow_frequency = 0; // Reset Counter
+    Serial.print(l_hour, DEC); // Print litres/hour
+    Serial.println(" L/hour");
+    lcd.setCursor(0, 2);
+    lcd.print("Flow Level :");
+    lcd.print(l_hour, DEC);
+    lcd.print(" L/H  ");
+  }
+}
